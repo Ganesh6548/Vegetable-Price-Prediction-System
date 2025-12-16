@@ -1,0 +1,82 @@
+"""
+Test script for vegetable price predictions
+"""
+
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.predict import VegetablePricePredictor
+
+def test_predictions():
+    """Test the prediction system"""
+    
+    # Check if model exists
+    model_path = "models/vegetable_price_model.joblib"
+    if not os.path.exists(model_path):
+        print("❌ Model not found. Please train the model first.")
+        return
+    
+    # Load predictor
+    print("🧪 Loading predictor...")
+    predictor = VegetablePricePredictor(model_path)
+    
+    # Test cases
+    test_cases = [
+        {
+            'vegetable': 'tomato',
+            'month': 'jan',
+            'temp': 15,
+            'disaster_happen': 'no',
+            'vegetable_condition': 'fresh',
+            'expected_range': (20, 60)  # Expected price range
+        },
+        {
+            'vegetable': 'potato',
+            'month': 'apr',
+            'temp': 32,
+            'disaster_happen': 'no',
+            'vegetable_condition': 'fresh',
+            'expected_range': (15, 35)
+        },
+        {
+            'vegetable': 'ginger',
+            'month': 'jan',
+            'temp': 15,
+            'disaster_happen': 'yes',
+            'vegetable_condition': 'fresh',
+            'expected_range': (80, 200)
+        }
+    ]
+    
+    print("\n🧪 Running prediction tests...")
+    print("-" * 70)
+    
+    passed = 0
+    total = len(test_cases)
+    
+    for i, test in enumerate(test_cases, 1):
+        print(f"\nTest {i}: {test['vegetable'].title()} in {test['month'].title()}")
+        print(f"  Temp: {test['temp']}°C, Disaster: {test['disaster_happen']}, Condition: {test['vegetable_condition']}")
+        
+        price = predictor.predict(**{k: v for k, v in test.items() if k != 'expected_range'})
+        
+        if price is not None:
+            min_price, max_price = test['expected_range']
+            if min_price <= price <= max_price:
+                print(f"  ✅ PASS: ₹{price:.2f} (expected ₹{min_price}-₹{max_price})")
+                passed += 1
+            else:
+                print(f"  ❌ FAIL: ₹{price:.2f} (expected ₹{min_price}-₹{max_price})")
+        else:
+            print(f"  ❌ FAIL: Prediction failed")
+    
+    print(f"\n📊 Test Results: {passed}/{total} passed")
+    
+    if passed == total:
+        print("🎉 All tests passed successfully!")
+    else:
+        print("⚠️  Some tests failed. Check the model and data.")
+
+if __name__ == "__main__":
+    test_predictions()

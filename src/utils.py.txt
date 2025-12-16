@@ -1,0 +1,83 @@
+"""
+Utility functions for Vegetable Price Prediction
+"""
+
+import pandas as pd
+import os
+
+def clean_vegetable_name(name):
+    """Clean and standardize vegetable names"""
+    if pd.isna(name):
+        return 'unknown'
+    
+    name = str(name).strip().lower()
+    
+    # Common corrections
+    corrections = {
+        'tomato ': 'tomato',
+        'pointed grourd ': 'pointed gourd',
+        'pumkin': 'pumpkin',
+        'califlower': 'cauliflower',
+        'cabage': 'cabbage',
+        'chilly': 'chili',
+        'brinjal': 'eggplant',
+        'okra': 'ladyfinger',
+        'radish': 'radish',
+        'raddish': 'radish',
+        'Raddish': 'radish'
+    }
+    
+    return corrections.get(name, name)
+
+def print_header(text):
+    """Print formatted header"""
+    print("\n" + "="*60)
+    print(f"🥦 {text}")
+    print("="*60)
+
+def validate_input(vegetable, month, temp):
+    """Validate user input"""
+    errors = []
+    
+    if not vegetable or len(vegetable.strip()) == 0:
+        errors.append("Vegetable name is required")
+    
+    if not month or len(month.strip()) == 0:
+        errors.append("Month is required")
+    
+    try:
+        temp = float(temp)
+        if temp < -20 or temp > 50:
+            errors.append("Temperature should be between -20°C and 50°C")
+    except ValueError:
+        errors.append("Temperature must be a number")
+    
+    return errors
+
+def save_prediction_history(predictions):
+    """Save prediction history to CSV"""
+    from datetime import datetime
+    
+    df = pd.DataFrame(predictions)
+    df['timestamp'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    # Save to CSV
+    history_file = "data/prediction_history.csv"
+    try:
+        if os.path.exists(history_file):
+            existing_df = pd.read_csv(history_file)
+            combined_df = pd.concat([existing_df, df], ignore_index=True)
+        else:
+            combined_df = df
+        combined_df.to_csv(history_file, index=False)
+        print(f"📝 Prediction saved to {history_file}")
+    except Exception as e:
+        print(f"⚠️  Could not save history: {e}")
+
+def check_dataset_columns(df):
+    """Check if dataset has required columns"""
+    required = ['Vegetable', 'Season', 'Month', 'Temp', 
+                'Disaster_Happen', 'Vegetable condition', 'Price_per_kg']
+    
+    missing = [col for col in required if col not in df.columns]
+    return missing

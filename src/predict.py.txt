@@ -1,0 +1,104 @@
+"""
+Prediction module for Vegetable Price Prediction
+"""
+
+import pandas as pd
+import joblib
+
+class VegetablePricePredictor:
+    """Predict vegetable prices using trained model"""
+    
+    def __init__(self, model_path):
+        """Initialize predictor with trained model"""
+        self.model_path = model_path
+        self._load_model()
+    
+    def _load_model(self):
+        """Load the trained model"""
+        model_data = joblib.load(self.model_path)
+        self.model = model_data['model']
+        self.preprocessor = model_data['preprocessor']
+        self.label_encoders = model_data['label_encoders']
+        self.metadata = model_data['metadata']
+        
+        print(f"✅ Model loaded successfully")
+        print(f"   Trained on: {self.metadata['date_trained']}")
+        print(f"   Samples: {self.metadata['num_samples']}")
+        print(f"   Vegetables: {self.metadata['vegetable_count']}")
+    
+    def _get_season_from_month(self, month):
+        """Determine season from month"""
+        month = month.strip().lower()[:3]
+        
+        season_map = {
+            'dec': 'winter', 'jan': 'winter', 'feb': 'winter',
+            'mar': 'spring', 'apr': 'spring', 'may': 'spring',
+            'jun': 'summer', 'jul': 'summer', 'aug': 'summer',
+            'sep': 'fall', 'oct': 'fall', 'nov': 'fall'
+        }
+        
+        return season_map.get(month, 'winter')
+    
+    def predict(self, vegetable, month, temp, disaster_happen='no', vegetable_condition='fresh'):
+        """
+        Predict vegetable price
+        
+        Args:
+            vegetable (str): Name of the vegetable
+            month (str): Month (e.g., 'jan', 'february')
+            temp (float): Temperature in Celsius
+            disaster_happen (str): 'yes' or 'no'
+            vegetable_condition (str): 'fresh', 'average', or 'scrap'
+        
+        Returns:
+            float: Predicted price per kg
+        """
+        try:
+            # Prepare input
+            season = self._get_season_from_month(month)
+            month_key = month.strip().lower()[:3]
+            
+            input_data = {
+                'Vegetable': vegetable.strip().lower(),
+                'Season': season,
+                'Month': month_key,
+                'Temp': float(temp),
+                'Disaster_Happen': 1 if str(disaster_happen).lower() in ['yes', '1', 'true'] else 0,
+                'Vegetable condition': vegetable_condition.strip().lower()
+            }
+            
+            # Convert to DataFrame
+            input_df = pd.DataFrame([input_data])
+            
+            # Encode categorical variables
+            for col in ['Vegetable', 'Season', 'Month', 'Vegetable condition']:
+                if col in self.label_encoders:
+                    value = input_df[col].iloc[0]
+                    if value in self.label_encoders[col].classes_:
+                        input_df[col] = self.label_encoders[col].transform([value])[0]
+                    else:
+                        # Handle unseen categories
+                        print(f"⚠️  '{value}' not in training data for {col}")
+                        input_df[col] = -1
+            
+            # Preprocess and predict
+            X_processed = self.preprocessor.transform(input_df)
+            predicted_price = self.model.predict(X_processed)[0]
+            
+            return round(predicted_price, 2)
+            
+        except Exception as e:
+            print(f"❌ Prediction error: {str(e)}")
+            return None
+    
+    def get_available_vegetables(self):
+        """Get list of vegetables the model was trained on"""
+        return list(self.label_encoders['Vegetable'].classes_)
+    
+    def get_model_info(self):
+        """Get information about the trained model"""
+        return self.metadata
+
+if __name__ == "__main__":
+    # Example usage
+    print("This is the prediction module. Use from main.py.")

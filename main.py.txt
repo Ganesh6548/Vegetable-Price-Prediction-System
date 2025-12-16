@@ -1,0 +1,169 @@
+"""
+🥦 Vegetable Price Prediction System
+Main Application File
+"""
+
+import os
+import sys
+
+def main():
+    """Main entry point for the application"""
+    print("="*60)
+    print("🥦 VEGETABLE PRICE PREDICTION SYSTEM")
+    print("="*60)
+    
+    while True:
+        print("\n" + "="*60)
+        print("MAIN MENU:")
+        print("1. Train a new model")
+        print("2. Make predictions")
+        print("3. Run quick tests")
+        print("4. Exit")
+        
+        choice = input("\nEnter your choice (1-4): ").strip()
+        
+        if choice == '1':
+            train_model()
+        elif choice == '2':
+            make_predictions()
+        elif choice == '3':
+            run_tests()
+        elif choice == '4':
+            print("\n👋 Thank you for using Vegetable Price Prediction System!")
+            sys.exit(0)
+        else:
+            print("❌ Invalid choice. Please try again.")
+
+def train_model():
+    """Train a new prediction model"""
+    print("\n" + "="*60)
+    print("TRAIN NEW MODEL")
+    print("="*60)
+    
+    # Check if data exists
+    data_path = "data/Vegetable_market.csv"
+    if not os.path.exists(data_path):
+        print(f"❌ Data file not found at {data_path}")
+        print("Please ensure the dataset is in the data/ folder.")
+        return
+    
+    try:
+        # Try to import and use the trainer
+        from src.train import VegetablePriceTrainer
+        trainer = VegetablePriceTrainer()
+        trainer.train(data_path)
+        print("\n✅ Model training completed successfully!")
+    except ImportError as e:
+        print(f"\n❌ Cannot import training module: {str(e)}")
+        print("Please make sure all required files are in the src/ folder.")
+    except Exception as e:
+        print(f"\n❌ Error during training: {str(e)}")
+
+def make_predictions():
+    """Make vegetable price predictions"""
+    print("\n" + "="*60)
+    print("MAKE PREDICTIONS")
+    print("="*60)
+    
+    # Check if model exists
+    model_path = "models/vegetable_price_model.joblib"
+    if not os.path.exists(model_path):
+        print(f"❌ Model not found at {model_path}")
+        print("Please train a model first (Option 1).")
+        return
+    
+    try:
+        from src.predict import VegetablePricePredictor
+        predictor = VegetablePricePredictor(model_path)
+        
+        print("\nEnter prediction details:")
+        print("-" * 40)
+        
+        vegetable = input("Vegetable name: ").strip().lower()
+        month = input("Month (e.g., jan, feb, march): ").strip().lower()
+        temp = float(input("Temperature (°C): "))
+        
+        # Optional inputs with defaults
+        disaster = input("Disaster happened? (yes/no) [default: no]: ").strip().lower()
+        if not disaster:
+            disaster = 'no'
+            
+        condition = input("Vegetable condition (fresh/average/scrap) [default: fresh]: ").strip().lower()
+        if not condition:
+            condition = 'fresh'
+        
+        # Make prediction
+        price = predictor.predict(
+            vegetable=vegetable,
+            month=month,
+            temp=temp,
+            disaster_happen=disaster,
+            vegetable_condition=condition
+        )
+        
+        if price is not None:
+            print(f"\n🎯 PREDICTION RESULT:")
+            print(f"   Vegetable: {vegetable.title()}")
+            print(f"   Month: {month.title()}")
+            print(f"   Temperature: {temp}°C")
+            print(f"   Disaster: {'Yes' if disaster == 'yes' else 'No'}")
+            print(f"   Condition: {condition.title()}")
+            print(f"   ➡️  Predicted Price: ₹{price:.2f} per kg")
+        else:
+            print("❌ Could not make prediction. Please check your inputs.")
+            
+    except ImportError as e:
+        print(f"\n❌ Cannot import prediction module: {str(e)}")
+        print("Please make sure predict.py is in the src/ folder.")
+    except Exception as e:
+        print(f"\n❌ Error making prediction: {str(e)}")
+
+def run_tests():
+    """Run quick test predictions"""
+    print("\n" + "="*60)
+    print("QUICK TESTS")
+    print("="*60)
+    
+    model_path = "models/vegetable_price_model.joblib"
+    if not os.path.exists(model_path):
+        print(f"❌ Model not found. Please train a model first.")
+        return
+    
+    try:
+        from src.predict import VegetablePricePredictor
+        predictor = VegetablePricePredictor(model_path)
+        
+        # Test cases
+        test_cases = [
+            {'vegetable': 'tomato', 'month': 'jan', 'temp': 15, 'disaster': 'no', 'condition': 'fresh'},
+            {'vegetable': 'potato', 'month': 'apr', 'temp': 32, 'disaster': 'no', 'condition': 'fresh'},
+            {'vegetable': 'chilly', 'month': 'may', 'temp': 40, 'disaster': 'yes', 'condition': 'fresh'},
+            {'vegetable': 'ginger', 'month': 'jan', 'temp': 15, 'disaster': 'yes', 'condition': 'fresh'},
+        ]
+        
+        print("\nRunning test predictions...")
+        print("-" * 70)
+        
+        for i, test in enumerate(test_cases, 1):
+            price = predictor.predict(**test)
+            
+            if price is not None:
+                print(f"Test {i}: {test['vegetable'].title():<10} | {test['month'].title():<6} | "
+                      f"{test['temp']}°C | Disaster: {test['disaster'].title():<3} | "
+                      f"Condition: {test['condition'].title():<7} | Price: ₹{price:6.2f}/kg")
+        
+        print("\n✅ Tests completed successfully!")
+        
+    except ImportError as e:
+        print(f"\n❌ Cannot import prediction module: {str(e)}")
+    except Exception as e:
+        print(f"\n❌ Error running tests: {str(e)}")
+
+if __name__ == "__main__":
+    # Create necessary directories
+    os.makedirs("models", exist_ok=True)
+    os.makedirs("data", exist_ok=True)
+    os.makedirs("src", exist_ok=True)
+    os.makedirs("tests", exist_ok=True)
+    
+    main()

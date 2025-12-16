@@ -1,0 +1,225 @@
+"""
+Training module for Vegetable Price Prediction
+"""
+
+import pandas as pd
+import numpy as np
+from sklearn.preprocessing import LabelEncoder, OneHotEncoder, StandardScaler
+from sklearn.compose import ColumnTransformer
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.model_selection import train_test_split
+import joblib
+from datetime import datetime
+import os
+
+class VegetablePriceTrainer:
+    """Train a machine learning model to predict vegetable prices"""
+    
+    def __init__(self):
+        self.model = None
+        self.preprocessor = None
+        self.label_encoders = {}
+        self.required_columns = [
+            'Vegetable', 'Season', 'Month', 'Temp',
+            'Disaster_Happen', 'Vegetable condition', 'Price_per_kg'
+        ]
+        self.model_path = "models/vegetable_price_model.joblib"
+    
+    def load_and_preprocess_data(self, file_path):
+        """Load and preprocess the vegetable market dataset"""
+        print("📂 Loading dataset...")
+        
+        try:
+            # Load data
+            df = pd.read_csv(file_path)
+            
+            # Clean column names
+            df.columns = df.columns.str.strip()
+            
+            # Rename columns
+            df.rename(columns={
+                'Deasaster Happen in last 3month': 'Disaster_Happen',
+                'Price per kg': 'Price_per_kg'
+            }, inplace=True)
+            
+            # Clean string columns
+            string_cols = ['Vegetable', 'Season', 'Month', 'Vegetable condition']
+            for col in string_cols:
+                if col in df.columns:
+                    df[col] = df[col].astype(str).str.strip().str.lower()
+            
+            # Handle missing months
+            if 'Month' in df.columns:
+                df['Month'] = df['Month'].fillna('unknown')
+            
+            # Encode disaster column
+            if 'Disaster_Happen' in df.columns:
+                df['Disaster_Happen'] = df['Disaster_Happen'].map({
+                    'yes': 1, 'no': 0, '1': 1, '0': 0
+                }).fillna(0).astype(int)
+            
+            # Standardize vegetable condition
+            condition_map = {
+                'fresh': 'fresh',
+                'avarage': 'average',
+                'average': 'average',
+                'scrap': 'scrap',
+                'scarp': 'scrap'
+            }
+            if 'Vegetable condition' in df.columns:
+                df['Vegetable condition'] = df['Vegetable condition'].map(condition_map).fillna('average')
+            
+            # Convert temperature to numeric
+            if 'Temp' in df.columns:
+                df['Temp'] = pd.to_numeric(df['Temp'], errors='coerce')
+            
+            # Fill missing temperatures
+            month_temp_map = {
+                'jan': 15, 'feb': 16, 'mar': 20, 'apr': 25,
+                'may': 28, 'jun': 30, 'jul': 29, 'aug': 28,
+                'sep': 26, 'oct': 24, 'nov': 20, 'dec': 17
+            }
+            df['Temp'] = df.apply(
+                lambda row: month_temp_map.get(row['Month'], 25) 
+                if pd.isna(row['Temp']) else row['Temp'], 
+                axis=1
+            )
+            
+            print(f"✅ Loaded {len(df)} records")
+            print(f"📊 Features: {list(df.columns)}")
+            print(f"💰 Price range: ₹{df['Price_per_kg'].min():.2f} - ₹{df['Price_per_kg'].max():.2f}")
+            
+            return df[self.required_columns]
+            
+        except Exception as e:
+            print(f"❌ Error loading data: {str(e)}")
+            raise
+    
+    def train(self, data_path):
+        """Train the model on the provided dataset"""
+        print("\n" + "="*60)
+        print("🚀 STARTING MODEL TRAINING")
+        print("="*60)
+        
+        # Load and preprocess data
+        data = self.load_and_preprocess_data(data_path)
+        
+        # Data summary
+        print("\n📋 Dataset Summary:")
+        print(f"Total samples: {len(data)}")
+        print(f"Unique vegetables: {data['Vegetable'].nunique()}")
+        print(f"Missing values: {data.isnull().sum().sum()}")
+        
+        # Prepare features
+        X = data.drop('Price_per_kg', axis=1)
+        y = data['Price_per_kg']
+        
+        # Split data (optional, for validation)
+        X_train, X_test, y_train, y_test = train_test_split(
+            X, y, test_size=0.2, random_state=42
+        )
+        
+        print(f"\n🧮 Data split:")
+        print(f"   Training samples: {len(X_train)}")
+        print(f"   Testing samples:  {len(X_test)}")
+        
+        # Encode categorical variables
+        categorical_cols = ['Vegetable', 'Season', 'Month', 'Vegetable condition']
+        numerical_cols = ['Temp', 'Disaster_Happen']
+        
+        for col in categorical_cols:
+            le = LabelEncoder()
+            X_train[col] = le.fit_transform(X_train[col])
+            if len(X_test) > 0:
+                X_test[col] = le.transform(X_test[col])
+            self.label_encoders[col] = le
+            print(f"   Encoded {col}: {len(le.classes_)} categories")
+        
+        # Create preprocessing pipeline
+        self.preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', StandardScaler(), numerical_cols),
+                ('cat', OneHotEncoder(handle_unknown='ignore', sparse_output=False), categorical_cols)
+            ])
+        
+        # Preprocess data
+        print("\n⚙️  Preprocessing data...")
+        X_train_processed = self.preprocessor.fit_transform(X_train)
+        if len(X_test) > 0:
+            X_test_processed = self.preprocessor.transform(X_test)
+        
+        # Train model
+        print("🧠 Training Random Forest model...")
+        self.model = RandomForestRegressor(
+            n_estimators=200,
+            random_state=42,
+            min_samples_leaf=2,
+            max_depth=10,
+            n_jobs=-1
+        )
+        
+        self.model.fit(X_train_processed, y_train)
+        
+        # Calculate scores
+        train_score = self.model.score(X_train_processed, y_train)
+        print(f"\n✅ Model Training Results:")
+        print(f"   Training R² score: {train_score:.4f}")
+        
+        if len(X_test) > 0:
+            test_score = self.model.score(X_test_processed, y_test)
+            print(f"   Testing R² score:  {test_score:.4f}")
+        
+        # Feature importance
+        feature_names = numerical_cols + list(
+            self.preprocessor.named_transformers_['cat'].get_feature_names_out(categorical_cols)
+        )
+        
+        importance_df = pd.DataFrame({
+            'feature': feature_names,
+            'importance': self.model.feature_importances_
+        }).sort_values('importance', ascending=False)
+        
+        print("\n🏆 Top 5 Important Features:")
+        print(importance_df.head(5).to_string(index=False))
+        
+        # Save model
+        self._save_model(data)
+        
+        print("\n" + "="*60)
+        print("🎉 TRAINING COMPLETED SUCCESSFULLY!")
+        print("="*60)
+        
+        return self.model
+    
+    def _save_model(self, data):
+        """Save the trained model with metadata"""
+        model_data = {
+            'model': self.model,
+            'preprocessor': self.preprocessor,
+            'label_encoders': self.label_encoders,
+            'metadata': {
+                'num_samples': len(data),
+                'date_trained': datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                'features_used': list(data.columns),
+                'model_type': 'RandomForestRegressor',
+                'vegetable_count': data['Vegetable'].nunique(),
+                'price_stats': {
+                    'min': float(data['Price_per_kg'].min()),
+                    'max': float(data['Price_per_kg'].max()),
+                    'mean': float(data['Price_per_kg'].mean()),
+                    'std': float(data['Price_per_kg'].std())
+                }
+            }
+        }
+        
+        # Ensure models directory exists
+        os.makedirs(os.path.dirname(self.model_path), exist_ok=True)
+        
+        # Save model
+        joblib.dump(model_data, self.model_path)
+        print(f"💾 Model saved to: {self.model_path}")
+
+if __name__ == "__main__":
+    # Example usage for direct running
+    print("This is the training module. Run from main.py instead.")
+    print("Or use: python -c \"from train import VegetablePriceTrainer; t=VegetablePriceTrainer(); t.train('data/Vegetable_market.csv')\"")
